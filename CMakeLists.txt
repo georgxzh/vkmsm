@@ -99,3 +99,6 @@ add_dependencies(blst blst_build)
 
 add_executable(stage1_field_test src/stage1_field_test.cpp src/fp.cpp)
 target_link_libraries(stage1_field_test PRIVATE blst)
+
+add_executable(stage2_point_test src/stage2_point_test.cpp src/point.cpp src/fp.cpp)
+target_link_libraries(stage2_point_test PRIVATE blst)
