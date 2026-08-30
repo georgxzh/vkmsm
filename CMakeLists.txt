@@ -10,23 +10,30 @@ if(NOT GLSLC)
     message(FATAL_ERROR "glslc not found - is the Vulkan SDK installed and VULKAN_SDK set?")
 endif()
 
-set(SHADER_SRC ${CMAKE_SOURCE_DIR}/shaders/add.comp)
-set(SHADER_SPV ${CMAKE_BINARY_DIR}/shaders/add.comp.spv)
+# Compiles shaders/<name> to ${CMAKE_BINARY_DIR}/shaders/<name>.spv and
+# sets ${out_var} to that output path in the caller's scope.
+function(compile_shader name out_var)
+    set(src ${CMAKE_SOURCE_DIR}/shaders/${name})
+    set(spv ${CMAKE_BINARY_DIR}/shaders/${name}.spv)
+    add_custom_command(
+        OUTPUT ${spv}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
+        COMMAND ${GLSLC} ${src} -o ${spv}
+        DEPENDS ${src}
+        COMMENT "Compiling ${name} -> SPIR-V"
+        VERBATIM
+    )
+    add_custom_target(shader_${name} ALL DEPENDS ${spv})
+    set(${out_var} ${spv} PARENT_SCOPE)
+endfunction()
 
-add_custom_command(
-    OUTPUT ${SHADER_SPV}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
-    COMMAND ${GLSLC} ${SHADER_SRC} -o ${SHADER_SPV}
-    DEPENDS ${SHADER_SRC}
-    COMMENT "Compiling add.comp -> SPIR-V"
-    VERBATIM
-)
-add_custom_target(shaders ALL DEPENDS ${SHADER_SPV})
+compile_shader(add.comp ADD_SHADER_SPV)
+compile_shader(fp_ops.comp FP_OPS_SHADER_SPV)
 
 add_executable(stage0_vecadd src/stage0_vecadd.cpp)
-add_dependencies(stage0_vecadd shaders)
+add_dependencies(stage0_vecadd shader_add.comp)
 target_link_libraries(stage0_vecadd PRIVATE Vulkan::Vulkan)
-target_compile_definitions(stage0_vecadd PRIVATE SHADER_PATH="${SHADER_SPV}")
+target_compile_definitions(stage0_vecadd PRIVATE SHADER_PATH="${ADD_SHADER_SPV}")
 
 # --- blst: CPU-side oracle library for known-answer test vectors ---
 # blst has no CMakeLists.txt of its own; it ships build.bat (Windows) /
@@ -108,3 +115,8 @@ target_link_libraries(stage3a_msm_naive_test PRIVATE blst)
 
 add_executable(stage3b_pippenger_test src/stage3b_pippenger_test.cpp src/msm.cpp src/point.cpp src/fp.cpp)
 target_link_libraries(stage3b_pippenger_test PRIVATE blst)
+
+add_executable(stage4_field_shader_test src/stage4_field_shader_test.cpp src/fp.cpp)
+add_dependencies(stage4_field_shader_test shader_fp_ops.comp)
+target_link_libraries(stage4_field_shader_test PRIVATE Vulkan::Vulkan)
+target_compile_definitions(stage4_field_shader_test PRIVATE SHADER_PATH="${FP_OPS_SHADER_SPV}")

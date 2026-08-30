@@ -26,6 +26,11 @@ struct Fp {
 // The BLS12-381 base field modulus, as plain (non-Montgomery) limbs.
 const Fp& fp_modulus();
 
+// The CIOS reduction constant (-p^-1 mod 2^32). Exposed so the GPU port
+// (Stage 4) can be handed the exact same constant the CPU implementation
+// derived and self-checked, rather than re-deriving or re-hardcoding it.
+uint32_t fp_n0();
+
 // Additive and multiplicative identities, in Montgomery form.
 Fp fp_zero();
 Fp fp_one();

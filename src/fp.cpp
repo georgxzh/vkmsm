@@ -140,6 +140,8 @@ const Fp& fp_modulus() {
     return m;
 }
 
+uint32_t fp_n0() { return constants().n0; }
+
 Fp fp_zero() { return Fp{}; }
 
 Fp fp_one() {
