@@ -48,7 +48,8 @@ Each stage validates the one before it; none are skipped.
   naive baseline across sizes 0-1024 and window sizes 1-16 bits).
 - [x] **Stage 4** — port field arithmetic to GLSL compute shaders, validated
   against the CPU reference (3,072 checks across add/sub/mul, 0 failures).
-- [ ] **Stage 5** — port point arithmetic to GLSL compute shaders.
+- [x] **Stage 5** — port point arithmetic to GLSL compute shaders, validated
+  against the CPU reference (1,024 checks across double/add, 0 failures).
 - [ ] **Stage 6** — GPU Pippenger implementation.
 - [ ] **Stage 7** — benchmarking harness (GPU vs. CPU throughput).
 - [ ] **Stage 8** (stretch) — window-size / bucket-count tuning.

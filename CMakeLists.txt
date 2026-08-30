@@ -11,7 +11,9 @@ if(NOT GLSLC)
 endif()
 
 # Compiles shaders/<name> to ${CMAKE_BINARY_DIR}/shaders/<name>.spv and
-# sets ${out_var} to that output path in the caller's scope.
+# sets ${out_var} to that output path in the caller's scope. Extra args are
+# additional dependencies (e.g. an #include'd .glsl file) that should also
+# trigger a recompile when changed.
 function(compile_shader name out_var)
     set(src ${CMAKE_SOURCE_DIR}/shaders/${name})
     set(spv ${CMAKE_BINARY_DIR}/shaders/${name}.spv)
@@ -19,7 +21,7 @@ function(compile_shader name out_var)
         OUTPUT ${spv}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
         COMMAND ${GLSLC} ${src} -o ${spv}
-        DEPENDS ${src}
+        DEPENDS ${src} ${ARGN}
         COMMENT "Compiling ${name} -> SPIR-V"
         VERBATIM
     )
@@ -27,8 +29,10 @@ function(compile_shader name out_var)
     set(${out_var} ${spv} PARENT_SCOPE)
 endfunction()
 
+set(FP_ARITH_GLSL ${CMAKE_SOURCE_DIR}/shaders/fp_arith.glsl)
 compile_shader(add.comp ADD_SHADER_SPV)
-compile_shader(fp_ops.comp FP_OPS_SHADER_SPV)
+compile_shader(fp_ops.comp FP_OPS_SHADER_SPV ${FP_ARITH_GLSL})
+compile_shader(point_ops.comp POINT_OPS_SHADER_SPV ${FP_ARITH_GLSL})
 
 add_executable(stage0_vecadd src/stage0_vecadd.cpp)
 add_dependencies(stage0_vecadd shader_add.comp)
@@ -120,3 +124,8 @@ add_executable(stage4_field_shader_test src/stage4_field_shader_test.cpp src/fp.
 add_dependencies(stage4_field_shader_test shader_fp_ops.comp)
 target_link_libraries(stage4_field_shader_test PRIVATE Vulkan::Vulkan)
 target_compile_definitions(stage4_field_shader_test PRIVATE SHADER_PATH="${FP_OPS_SHADER_SPV}")
+
+add_executable(stage5_point_shader_test src/stage5_point_shader_test.cpp src/point.cpp src/fp.cpp)
+add_dependencies(stage5_point_shader_test shader_point_ops.comp)
+target_link_libraries(stage5_point_shader_test PRIVATE Vulkan::Vulkan blst)
+target_compile_definitions(stage5_point_shader_test PRIVATE SHADER_PATH="${POINT_OPS_SHADER_SPV}")

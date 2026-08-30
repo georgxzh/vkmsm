@@ -1,17 +1,12 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
 
 // BLS12-381 F_p arithmetic on the GPU: the same Montgomery/CIOS algorithm
 // as src/fp.cpp, ported to GLSL. Field elements are 12 x 32-bit limbs,
 // matching the CPU representation exactly, so the two implementations can
 // be compared limb-for-limb.
-//
-// GLSL's uaddCarry / usubBorrow / umulExtended (core since GLSL 4.00, no
-// extension needed) are the direct GPU equivalents of the mac()/adc()
-// carry-propagation helpers used on the CPU side.
 
 layout(local_size_x = 64) in;
-
-const int LIMBS = 12;
 
 layout(set = 0, binding = 0) readonly buffer BufA { uint bufA[]; };
 layout(set = 0, binding = 1) readonly buffer BufB { uint bufB[]; };
@@ -20,119 +15,10 @@ layout(set = 0, binding = 2) buffer BufC { uint bufC[]; };
 layout(push_constant) uniform PushConstants {
     uint op;  // 0 = add, 1 = sub, 2 = mul
     uint n0;
-    uint modulus[LIMBS];
+    uint modulus[12];
 } pc;
 
-// a + b + carry_in, returning the low word and updating carry to the
-// carry-out (0 or 1). Equivalent to the CPU adc() helper.
-uint adc(inout uint carry, uint a, uint b) {
-    uint c1, c2;
-    uint s1 = uaddCarry(a, b, c1);
-    uint s2 = uaddCarry(s1, carry, c2);
-    carry = c1 + c2;
-    return s2;
-}
-
-// a*b + addend + carry_in, returning the low word and updating carry to
-// the full 32-bit high word of the result. Equivalent to the CPU mac().
-uint mac(inout uint carry, uint a, uint b, uint addend) {
-    uint hi, lo;
-    umulExtended(a, b, hi, lo);
-    uint c1, c2;
-    uint s1 = uaddCarry(lo, addend, c1);
-    uint s2 = uaddCarry(s1, carry, c2);
-    carry = hi + c1 + c2;
-    return s2;
-}
-
-bool geq(uint x[LIMBS], uint y[LIMBS]) {
-    for (int i = LIMBS - 1; i >= 0; i--) {
-        if (x[i] != y[i]) return x[i] > y[i];
-    }
-    return true;
-}
-
-uint[LIMBS] raw_add(uint x[LIMBS], uint y[LIMBS], out uint carry_out) {
-    uint r[LIMBS];
-    uint carry = 0u;
-    for (int i = 0; i < LIMBS; i++) {
-        r[i] = adc(carry, x[i], y[i]);
-    }
-    carry_out = carry;
-    return r;
-}
-
-uint[LIMBS] raw_sub(uint x[LIMBS], uint y[LIMBS], out uint borrow_out) {
-    uint r[LIMBS];
-    uint borrow = 0u;
-    for (int i = 0; i < LIMBS; i++) {
-        uint b1, b2;
-        uint d1 = usubBorrow(x[i], y[i], b1);
-        uint d2 = usubBorrow(d1, borrow, b2);
-        r[i] = d2;
-        borrow = b1 + b2;
-    }
-    borrow_out = borrow;
-    return r;
-}
-
-uint[LIMBS] fp_add(uint a[LIMBS], uint b[LIMBS]) {
-    uint carry;
-    uint r[LIMBS] = raw_add(a, b, carry);
-    if (geq(r, pc.modulus)) {
-        uint borrow;
-        r = raw_sub(r, pc.modulus, borrow);
-    }
-    return r;
-}
-
-uint[LIMBS] fp_sub(uint a[LIMBS], uint b[LIMBS]) {
-    uint borrow;
-    uint r[LIMBS] = raw_sub(a, b, borrow);
-    if (borrow != 0u) {
-        uint carry;
-        r = raw_add(r, pc.modulus, carry);
-    }
-    return r;
-}
-
-// CIOS Montgomery multiplication - see src/fp.cpp for the derivation and
-// the CPU version this mirrors line-for-line.
-uint[LIMBS] fp_mul(uint a[LIMBS], uint b[LIMBS]) {
-    uint t[LIMBS + 2];
-    for (int i = 0; i < LIMBS + 2; i++) t[i] = 0u;
-
-    for (int i = 0; i < LIMBS; i++) {
-        uint carry = 0u;
-        for (int j = 0; j < LIMBS; j++) {
-            t[j] = mac(carry, a[j], b[i], t[j]);
-        }
-        uint carry2 = 0u;
-        t[LIMBS] = adc(carry2, t[LIMBS], carry);
-        t[LIMBS + 1] += carry2;
-
-        uint m = t[0] * pc.n0;
-
-        uint carry3 = 0u;
-        mac(carry3, m, pc.modulus[0], t[0]);  // low word discarded: == 0 by construction
-        for (int j = 1; j < LIMBS; j++) {
-            t[j - 1] = mac(carry3, m, pc.modulus[j], t[j]);
-        }
-        uint carry4 = 0u;
-        t[LIMBS - 1] = adc(carry4, t[LIMBS], carry3);
-        t[LIMBS] = t[LIMBS + 1] + carry4;
-        t[LIMBS + 1] = 0u;
-    }
-
-    uint result[LIMBS];
-    for (int i = 0; i < LIMBS; i++) result[i] = t[i];
-
-    while (geq(result, pc.modulus)) {
-        uint borrow;
-        result = raw_sub(result, pc.modulus, borrow);
-    }
-    return result;
-}
+#include "fp_arith.glsl"
 
 void main() {
     uint i = gl_GlobalInvocationID.x;
