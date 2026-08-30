@@ -1,0 +1,14 @@
+# Build output (CMake build tree, includes fetched blst source/binaries)
+/build/
+
+# Local Claude Code tool settings (machine-specific, not meant to be shared)
+/.claude/
+
+# Visual Studio / MSVC
+.vs/
+*.pdb
+*.ilk
+*.obj
+*.lib
+*.exp
+*.exe

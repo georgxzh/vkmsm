@@ -1,0 +1,18 @@
+#version 450
+
+// How many threads run per workgroup on the GPU. 256 is a common,
+// safe default supported by essentially all GPUs.
+layout(local_size_x = 256) in;
+
+// Three GPU-side arrays ("storage buffers"), bound to slots 0, 1, 2.
+// readonly/writeonly just document intent to the compiler/driver.
+layout(set = 0, binding = 0) readonly buffer BufA { float a[]; };
+layout(set = 0, binding = 1) readonly buffer BufB { float b[]; };
+layout(set = 0, binding = 2) writeonly buffer BufC { float c[]; };
+
+void main() {
+    // Each GPU thread handles exactly one element, identified by its
+    // global index in the dispatch grid.
+    uint idx = gl_GlobalInvocationID.x;
+    c[idx] = a[idx] + b[idx];
+}
