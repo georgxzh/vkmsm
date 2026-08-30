@@ -50,7 +50,11 @@ Each stage validates the one before it; none are skipped.
   against the CPU reference (3,072 checks across add/sub/mul, 0 failures).
 - [x] **Stage 5** — port point arithmetic to GLSL compute shaders, validated
   against the CPU reference (1,024 checks across double/add, 0 failures).
-- [ ] **Stage 6** — GPU Pippenger implementation.
+- [x] **Stage 6** — GPU Pippenger implementation, validated against the
+  Stage 3 CPU Pippenger baseline (sizes 0-1024, 0 failures). Uses a
+  conflict-free bucket-assignment scheme (one GPU thread per bucket,
+  scanning all points) rather than atomics, since there's no atomic
+  elliptic-curve-point-addition primitive to atomically accumulate with.
 - [ ] **Stage 7** — benchmarking harness (GPU vs. CPU throughput).
 - [ ] **Stage 8** (stretch) — window-size / bucket-count tuning.
 

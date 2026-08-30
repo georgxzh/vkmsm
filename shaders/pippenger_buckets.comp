@@ -1,0 +1,93 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+// Stage 6: the parallel part of Pippenger's bucket method. One dispatch
+// per window (the host loops over windows, exactly like the CPU version
+// in src/msm.cpp), each processing all num_points input points for that
+// window's digit and producing num_buckets accumulated bucket points.
+//
+// Conflict-free bucket assignment: one GPU thread PER BUCKET, not per
+// point. Each thread scans every point and accumulates only the ones
+// whose digit (for this window) equals its own bucket index. Since every
+// thread only ever writes to its own bucket, there is no race between
+// threads and no atomics are needed - at the cost of doing num_buckets
+// redundant scalar-window comparisons per point (cheap bit ops) instead
+// of a single pass. This is the "conflict-free bucket-assignment scheme"
+// option, chosen over atomics because there's no atomic elliptic-curve-
+// point-addition operation to atomically accumulate with in the first
+// place. A sort-then-segmented-reduce scheme would do less redundant
+// work but is real added complexity - left for Stage 8 if warranted.
+//
+// The much cheaper "combine buckets into one window total" reduction
+// step (only num_buckets points, vs. num_points inputs) is done back on
+// the CPU host, reusing the already-validated Stage 2 point_add.
+
+layout(local_size_x = 64) in;
+
+layout(set = 0, binding = 0) readonly buffer PointsBuf { uint pointsBuf[]; };    // num_points * 36
+layout(set = 0, binding = 1) readonly buffer ScalarsBuf { uint scalarsBuf[]; };  // num_points * 8
+layout(set = 0, binding = 2) buffer BucketsBuf { uint bucketsBuf[]; };           // num_buckets * 36
+
+layout(push_constant) uniform PushConstants {
+    uint n0;
+    uint modulus[12];
+    uint window_index;
+    uint window_bits;
+    uint num_points;
+    uint num_buckets;
+} pc;
+
+#include "fp_arith.glsl"
+#include "point_arith.glsl"
+
+Point load_point(uint idx) {
+    Point p;
+    uint base = idx * (LIMBS * 3u);
+    for (int k = 0; k < LIMBS; k++) {
+        p.x[k] = pointsBuf[base + uint(k)];
+        p.y[k] = pointsBuf[base + LIMBS + uint(k)];
+        p.z[k] = pointsBuf[base + 2u * LIMBS + uint(k)];
+    }
+    return p;
+}
+
+// Same bit-extraction as scalar_window() in src/msm.cpp.
+uint scalar_window(uint idx) {
+    uint base = idx * 8u;  // Scalar is 8 x 32-bit limbs
+    uint bit_start = pc.window_index * pc.window_bits;
+    uint result = 0u;
+    for (uint i = 0u; i < pc.window_bits; i++) {
+        uint bit_pos = bit_start + i;
+        if (bit_pos >= 256u) break;
+        uint limb = bit_pos / 32u;
+        uint offset = bit_pos % 32u;
+        uint bitv = (scalarsBuf[base + limb] >> offset) & 1u;
+        result |= (bitv << i);
+    }
+    return result;
+}
+
+void main() {
+    uint k = gl_GlobalInvocationID.x;  // bucket index this thread owns
+    if (k >= pc.num_buckets) return;
+
+    Point acc;
+    for (int i = 0; i < LIMBS; i++) {
+        acc.x[i] = 0u;
+        acc.y[i] = 0u;
+        acc.z[i] = 0u;
+    }  // acc starts at infinity
+
+    for (uint i = 0u; i < pc.num_points; i++) {
+        if (scalar_window(i) == k) {
+            acc = point_add(acc, load_point(i));
+        }
+    }
+
+    uint base = k * (LIMBS * 3u);
+    for (int m = 0; m < LIMBS; m++) {
+        bucketsBuf[base + uint(m)] = acc.x[m];
+        bucketsBuf[base + LIMBS + uint(m)] = acc.y[m];
+        bucketsBuf[base + 2u * LIMBS + uint(m)] = acc.z[m];
+    }
+}

@@ -30,9 +30,11 @@ function(compile_shader name out_var)
 endfunction()
 
 set(FP_ARITH_GLSL ${CMAKE_SOURCE_DIR}/shaders/fp_arith.glsl)
+set(POINT_ARITH_GLSL ${CMAKE_SOURCE_DIR}/shaders/point_arith.glsl)
 compile_shader(add.comp ADD_SHADER_SPV)
 compile_shader(fp_ops.comp FP_OPS_SHADER_SPV ${FP_ARITH_GLSL})
-compile_shader(point_ops.comp POINT_OPS_SHADER_SPV ${FP_ARITH_GLSL})
+compile_shader(point_ops.comp POINT_OPS_SHADER_SPV ${FP_ARITH_GLSL} ${POINT_ARITH_GLSL})
+compile_shader(pippenger_buckets.comp PIPPENGER_BUCKETS_SHADER_SPV ${FP_ARITH_GLSL} ${POINT_ARITH_GLSL})
 
 add_executable(stage0_vecadd src/stage0_vecadd.cpp)
 add_dependencies(stage0_vecadd shader_add.comp)
@@ -129,3 +131,8 @@ add_executable(stage5_point_shader_test src/stage5_point_shader_test.cpp src/poi
 add_dependencies(stage5_point_shader_test shader_point_ops.comp)
 target_link_libraries(stage5_point_shader_test PRIVATE Vulkan::Vulkan blst)
 target_compile_definitions(stage5_point_shader_test PRIVATE SHADER_PATH="${POINT_OPS_SHADER_SPV}")
+
+add_executable(stage6_pippenger_shader_test src/stage6_pippenger_shader_test.cpp src/msm.cpp src/point.cpp src/fp.cpp)
+add_dependencies(stage6_pippenger_shader_test shader_pippenger_buckets.comp)
+target_link_libraries(stage6_pippenger_shader_test PRIVATE Vulkan::Vulkan blst)
+target_compile_definitions(stage6_pippenger_shader_test PRIVATE SHADER_PATH="${PIPPENGER_BUCKETS_SHADER_SPV}")
