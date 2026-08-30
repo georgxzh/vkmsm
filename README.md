@@ -28,6 +28,9 @@ delivery — every stage is validated against a trusted CPU reference
 - **Field arithmetic:** Montgomery representation with CIOS
   (Coarsely Integrated Operand Scanning) multiplication — the standard
   approach, and the one that ports cleanly to shader code.
+- **Pippenger window size:** 8 bits by default (256 buckets/window), exposed
+  as a parameter rather than hard-coded — `window_bits` is revisited for
+  real performance tuning in Stage 8.
 
 ## Build order
 
@@ -38,10 +41,11 @@ Each stage validates the one before it; none are skipped.
   command-buffer/sync pipeline works.
 - [x] **Stage 1** — CPU finite field arithmetic (`F_p` for BLS12-381),
   validated against blst (65,000+ checks, 0 failures).
-- [ ] **Stage 2** — CPU elliptic curve point arithmetic (G1, Jacobian
-  coordinates).
-- [ ] **Stage 3** — CPU MSM baselines (naive double-and-add, then
-  Pippenger's bucket method).
+- [x] **Stage 2** — CPU elliptic curve point arithmetic (G1, Jacobian
+  coordinates), validated against blst (10,500+ checks, 0 failures).
+- [x] **Stage 3** — CPU MSM baselines: naive double-and-add (validated
+  against blst), then Pippenger's bucket method (validated against the
+  naive baseline across sizes 0-1024 and window sizes 1-16 bits).
 - [ ] **Stage 4** — port field arithmetic to GLSL compute shaders.
 - [ ] **Stage 5** — port point arithmetic to GLSL compute shaders.
 - [ ] **Stage 6** — GPU Pippenger implementation.

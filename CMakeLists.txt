@@ -102,3 +102,9 @@ target_link_libraries(stage1_field_test PRIVATE blst)
 
 add_executable(stage2_point_test src/stage2_point_test.cpp src/point.cpp src/fp.cpp)
 target_link_libraries(stage2_point_test PRIVATE blst)
+
+add_executable(stage3a_msm_naive_test src/stage3a_msm_naive_test.cpp src/msm.cpp src/point.cpp src/fp.cpp)
+target_link_libraries(stage3a_msm_naive_test PRIVATE blst)
+
+add_executable(stage3b_pippenger_test src/stage3b_pippenger_test.cpp src/msm.cpp src/point.cpp src/fp.cpp)
+target_link_libraries(stage3b_pippenger_test PRIVATE blst)
