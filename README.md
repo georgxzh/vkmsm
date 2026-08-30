@@ -55,8 +55,46 @@ Each stage validates the one before it; none are skipped.
   conflict-free bucket-assignment scheme (one GPU thread per bucket,
   scanning all points) rather than atomics, since there's no atomic
   elliptic-curve-point-addition primitive to atomically accumulate with.
-- [ ] **Stage 7** — benchmarking harness (GPU vs. CPU throughput).
+- [x] **Stage 7** — benchmarking harness (GPU vs. CPU throughput). See
+  [Results](#results) below.
 - [ ] **Stage 8** (stretch) — window-size / bucket-count tuning.
+
+## Results
+
+GPU vs CPU Pippenger MSM throughput, BLS12-381 G1, `window_bits=8` on both
+sides, Release build. Full report with a chart: `results/stage7_benchmark.html`
+(open in a browser); raw numbers: `results/stage7_benchmark.csv`.
+
+| n | CPU time | CPU pts/s | GPU time | GPU pts/s | GPU/CPU |
+|---|---|---|---|---|---|
+| 1,024  | 138.9 ms | 7,375 | 556.2 ms  | 1,841 | 0.25x |
+| 4,096  | 473.2 ms | 8,657 | 1.89 s    | 2,167 | 0.25x |
+| 16,384 | 1.81 s   | 9,030 | 7.23 s    | 2,265 | 0.25x |
+| 65,536 | 7.16 s   | 9,158 | 62.5 s    | 1,048 | 0.11x |
+
+GPU tested: AMD Radeon(TM) Graphics (integrated). Every result above was
+re-verified against the CPU reference before being trusted.
+
+**The GPU implementation is currently slower than CPU, and the gap widens
+with `n`.** This is a real, structural limitation of the Stage 6 design, not
+a fluke: the bucket-fill shader runs exactly `2^window_bits = 256` threads
+per dispatch (one thread per *bucket*, chosen to avoid races without atomics
+— there's no atomic elliptic-curve-point-addition operation to begin with),
+and each thread scans all `n` points sequentially. A GPU that can run far
+more than 256 threads concurrently sits mostly idle. At `n = 2^18` a single
+dispatch exceeded Windows' ~2s TDR (Timeout Detection and Recovery) limit
+and the driver killed it (`VK_ERROR_DEVICE_LOST`), which is why the
+benchmark stops at `2^16` instead of reaching the original `2^20` target.
+Fixing this needs a bucket-assignment scheme with far more active threads
+(e.g. one thread per point instead of per bucket) — real algorithm work,
+left for Stage 8.
+
+Public benchmark numbers exist for highly-tuned CUDA MSM implementations
+(cuZK, Icicle) at comparable sizes, achieving very high throughput on
+discrete NVIDIA GPUs. Those aren't included here: this project runs on an
+integrated AMD GPU with an untuned, correctness-first implementation, and a
+cross-hardware, cross-maturity comparison like that wouldn't be
+apples-to-apples.
 
 ## Building
 

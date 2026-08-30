@@ -1,0 +1,406 @@
+<title>vkMSM Benchmark</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface:        #f7f8fa;
+    --surface-card:   #ffffff;
+    --text-primary:   #10151c;
+    --text-secondary: #4d5561;
+    --text-muted:     #838d99;
+    --grid:           #e4e7ec;
+    --baseline:       #c7ccd4;
+    --border:         rgba(16,21,28,0.08);
+    --series-cpu:     #2a78d6;
+    --series-gpu:     #eb6834;
+    --callout-bg:     #fdf3ea;
+    --callout-border: #eecfae;
+    --callout-text:   #7a4a17;
+    --badge-good-bg:  #e6f6e9;
+    --badge-good-text:#0f6b1f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface:        #0d0f13;
+      --surface-card:   #161a21;
+      --text-primary:   #f4f6f8;
+      --text-secondary: #b6bdc7;
+      --text-muted:     #7a828d;
+      --grid:           #262b33;
+      --baseline:       #383f49;
+      --border:         rgba(255,255,255,0.08);
+      --series-cpu:     #3987e5;
+      --series-gpu:     #d95926;
+      --callout-bg:     #211a12;
+      --callout-border: #4a3520;
+      --callout-text:   #e3b784;
+      --badge-good-bg:  #10281a;
+      --badge-good-text:#4fd671;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface:        #0d0f13;
+    --surface-card:   #161a21;
+    --text-primary:   #f4f6f8;
+    --text-secondary: #b6bdc7;
+    --text-muted:     #7a828d;
+    --grid:           #262b33;
+    --baseline:       #383f49;
+    --border:         rgba(255,255,255,0.08);
+    --series-cpu:     #3987e5;
+    --series-gpu:     #d95926;
+    --callout-bg:     #211a12;
+    --callout-border: #4a3520;
+    --callout-text:   #e3b784;
+    --badge-good-bg:  #10281a;
+    --badge-good-text:#4fd671;
+  }
+
+  .viz-root {
+    background: var(--surface);
+    color: var(--text-primary);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 40px 24px 64px;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
+  .viz-root * { box-sizing: border-box; }
+  .viz-root .wrap { max-width: 880px; margin: 0 auto; }
+
+  .viz-root .masthead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px 24px;
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .viz-root h1 {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .viz-root .subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-top: 4px;
+  }
+  .viz-root .meta {
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  .viz-root .meta code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--text-secondary);
+  }
+
+  .viz-root .card {
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 28px 20px;
+    margin-bottom: 24px;
+  }
+  .viz-root .card h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 0 0 20px;
+  }
+
+  /* legend */
+  .viz-root .legend {
+    display: flex;
+    gap: 20px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 18px;
+  }
+  .viz-root .legend .key { display: inline-flex; align-items: center; gap: 7px; }
+  .viz-root .legend .swatch { width: 10px; height: 10px; border-radius: 2px; }
+
+  /* chart */
+  .viz-root .chart-scroll { overflow-x: auto; }
+  .viz-root svg { display: block; font-family: "IBM Plex Sans", sans-serif; }
+  .viz-root .axis-label { fill: var(--text-muted); font-size: 11px; }
+  .viz-root .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .viz-root .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .viz-root .bar-cpu { fill: var(--series-cpu); }
+  .viz-root .bar-gpu { fill: var(--series-gpu); }
+  .viz-root .bar-value { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .viz-root .group-label { fill: var(--text-secondary); font-size: 12px; font-family: "IBM Plex Mono", monospace; }
+  .viz-root .bar-group { cursor: default; }
+  .viz-root .bar-group rect { transition: opacity 0.12s ease; }
+  .viz-root .bar-group:hover rect.hit { opacity: 1; }
+  .viz-root rect.hit { fill: transparent; }
+
+  .viz-root .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--surface);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 8px 10px;
+    border-radius: 6px;
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 10px));
+    white-space: nowrap;
+    transition: opacity 0.1s ease;
+    z-index: 10;
+    font-variant-numeric: tabular-nums;
+  }
+  .viz-root .tooltip.visible { opacity: 1; }
+  .viz-root .tooltip b { font-family: "IBM Plex Mono", monospace; }
+
+  /* table */
+  .viz-root table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .viz-root th, .viz-root td {
+    text-align: right;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .viz-root th:first-child, .viz-root td:first-child { text-align: left; font-family: "IBM Plex Mono", monospace; }
+  .viz-root th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .viz-root td { color: var(--text-secondary); }
+  .viz-root td.n-col, .viz-root td:first-child { color: var(--text-primary); }
+  .viz-root .badge {
+    display: inline-block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--badge-good-bg);
+    color: var(--badge-good-text);
+  }
+
+  /* callout */
+  .viz-root .callout {
+    background: var(--callout-bg);
+    border: 1px solid var(--callout-border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--callout-text);
+  }
+  .viz-root .callout strong { color: var(--callout-text); }
+  .viz-root .callout .label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: block;
+    margin-bottom: 8px;
+  }
+  .viz-root .callout code {
+    font-family: "IBM Plex Mono", monospace;
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12.5px;
+  }
+
+  .viz-root footer {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<div class="viz-root">
+  <div class="wrap">
+
+    <div class="masthead">
+      <div>
+        <h1>vkMSM Benchmark</h1>
+        <div class="subtitle">GPU vs CPU multi-scalar multiplication &mdash; Pippenger&rsquo;s bucket method, BLS12-381 G1</div>
+      </div>
+      <div class="meta">
+        GPU: <code>AMD Radeon(TM) Graphics</code> (integrated)<br>
+        window_bits: <code>8</code> (both CPU and GPU)<br>
+        build: <code>Release</code>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Throughput by input size</h2>
+      <div class="legend">
+        <span class="key"><span class="swatch" style="background:var(--series-cpu)"></span>CPU Pippenger (Stage 3)</span>
+        <span class="key"><span class="swatch" style="background:var(--series-gpu)"></span>GPU Pippenger (Stage 6)</span>
+      </div>
+      <div class="chart-scroll">
+        <svg id="chart" viewBox="0 0 800 340" width="800" height="340"></svg>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Raw results</h2>
+      <table>
+        <thead>
+          <tr><th>n</th><th>CPU time</th><th>CPU pts/s</th><th>GPU time</th><th>GPU pts/s</th><th>GPU/CPU</th><th>Verified</th></tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <span class="label">Why GPU is slower here</span>
+      Every result above was independently re-verified against the CPU reference
+      (<code>point_equal</code>) before being trusted &mdash; the GPU implementation is
+      <strong>correct</strong> at every size tested. It is also currently
+      <strong>slower than CPU</strong>, and the gap widens with <em>n</em> rather than closing.
+      The reason is structural: Stage&nbsp;6&rsquo;s bucket-fill shader runs exactly
+      <code>2<sup>window_bits</sup> = 256</code> threads per dispatch (one per bucket, chosen to
+      avoid races without atomics &mdash; there&rsquo;s no atomic elliptic-curve-point-addition
+      primitive to begin with). Each thread scans all <em>n</em> points sequentially, so a
+      dispatch takes O(<em>n</em>) time on a GPU that can run far more than 256 threads at once.
+      At <code>n&nbsp;=&nbsp;2<sup>18</sup></code> a single dispatch exceeded Windows&rsquo; ~2s TDR
+      timeout and the driver killed it (<code>VK_ERROR_DEVICE_LOST</code>) &mdash; which is why this
+      chart stops at <code>2<sup>16</sup></code>. Reaching the original 2<sup>20</sup> target needs a
+      bucket-assignment scheme with far more active threads (e.g. one thread per point instead
+      of per bucket); that&rsquo;s real algorithm work, left for Stage&nbsp;8.
+    </div>
+
+    <footer>vkmsm &middot; Stage 7 &middot; georgxzh/vkmsm</footer>
+  </div>
+  <div class="tooltip" id="tooltip"></div>
+</div>
+
+<script>
+(function() {
+  const data = [
+    { n: 1024,  cpuMs: 138.9,  cpuTp: 7375,  gpuMs: 556.2,   gpuTp: 1841, ratio: 0.25 },
+    { n: 4096,  cpuMs: 473.2,  cpuTp: 8657,  gpuMs: 1889.8,  gpuTp: 2167, ratio: 0.25 },
+    { n: 16384, cpuMs: 1814.5, cpuTp: 9030,  gpuMs: 7233.4,  gpuTp: 2265, ratio: 0.25 },
+    { n: 65536, cpuMs: 7156.0, cpuTp: 9158,  gpuMs: 62523.0, gpuTp: 1048, ratio: 0.11 },
+  ];
+
+  const fmt = (x) => x.toLocaleString('en-US');
+  const fmtMs = (x) => x >= 1000 ? (x/1000).toFixed(2) + ' s' : x.toFixed(1) + ' ms';
+
+  // ---- table ----
+  const tbody = document.getElementById('table-body');
+  data.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + fmt(d.n) + '</td>' +
+      '<td>' + fmtMs(d.cpuMs) + '</td>' +
+      '<td>' + fmt(d.cpuTp) + '</td>' +
+      '<td>' + fmtMs(d.gpuMs) + '</td>' +
+      '<td>' + fmt(d.gpuTp) + '</td>' +
+      '<td>' + d.ratio.toFixed(2) + '&times;</td>' +
+      '<td><span class="badge">correct</span></td>';
+    tbody.appendChild(tr);
+  });
+
+  // ---- chart ----
+  const svg = document.getElementById('chart');
+  const tooltip = document.getElementById('tooltip');
+  const W = 800, H = 340;
+  const marginL = 56, marginR = 16, marginT = 16, marginB = 40;
+  const plotW = W - marginL - marginR;
+  const plotH = H - marginT - marginB;
+
+  const maxVal = Math.max(...data.map(d => Math.max(d.cpuTp, d.gpuTp)));
+  const yMax = Math.ceil(maxVal / 2000) * 2000; // round to clean step
+  const yTicks = [0, yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax];
+
+  const groupW = plotW / data.length;
+  const barW = 26;
+  const barGap = 3;
+
+  const ns = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs) {
+    const e = document.createElementNS(ns, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  const yScale = (v) => marginT + plotH - (v / yMax) * plotH;
+
+  // gridlines + y labels
+  yTicks.forEach(t => {
+    const y = yScale(t);
+    svg.appendChild(el('line', { x1: marginL, x2: W - marginR, y1: y, y2: y, class: t === 0 ? 'baseline' : 'grid-line' }));
+    const label = el('text', { x: marginL - 10, y: y + 4, 'text-anchor': 'end', class: 'axis-label' });
+    label.textContent = t >= 1000 ? (t/1000).toFixed(0) + 'k' : t.toFixed(0);
+    svg.appendChild(label);
+  });
+
+  data.forEach((d, i) => {
+    const gx = marginL + i * groupW + groupW / 2;
+    const group = el('g', { class: 'bar-group' });
+
+    const barsInfo = [
+      { val: d.cpuTp, cls: 'bar-cpu', dx: -barW - barGap/2, label: 'CPU', ms: d.cpuMs, tp: d.cpuTp },
+      { val: d.gpuTp, cls: 'bar-gpu', dx: barGap/2,          label: 'GPU', ms: d.gpuMs, tp: d.gpuTp },
+    ];
+
+    barsInfo.forEach(b => {
+      const x = gx + b.dx;
+      const yTop = yScale(b.val);
+      const barH = marginT + plotH - yTop;
+      const rect = el('rect', {
+        x: x, y: yTop, width: barW, height: Math.max(barH, 1),
+        rx: 4, ry: 4, class: b.cls
+      });
+      group.appendChild(rect);
+
+      const val = el('text', { x: x + barW/2, y: yTop - 7, 'text-anchor': 'middle', class: 'bar-value' });
+      val.textContent = (b.tp/1000).toFixed(1) + 'k';
+      group.appendChild(val);
+
+      const hit = el('rect', { x: x - 2, y: marginT, width: barW + 4, height: plotH, class: 'hit' });
+      hit.addEventListener('mouseenter', (ev) => {
+        tooltip.innerHTML = '<b>' + b.label + '</b>, n=' + fmt(d.n) + '<br>' +
+          fmtMs(b.ms) + ' &middot; ' + fmt(b.tp) + ' pts/s';
+        tooltip.classList.add('visible');
+        positionTooltip(ev);
+      });
+      hit.addEventListener('mousemove', positionTooltip);
+      hit.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+      group.appendChild(hit);
+    });
+
+    const label = el('text', { x: gx, y: H - marginB + 20, 'text-anchor': 'middle', class: 'group-label' });
+    label.textContent = 'n=' + (d.n >= 1024 ? (d.n/1024) + 'K' : d.n);
+    group.appendChild(label);
+
+    svg.appendChild(group);
+  });
+
+  function positionTooltip(ev) {
+    const rect = svg.getBoundingClientRect();
+    const root = ev.target.closest('.viz-root');
+    const rootRect = root.getBoundingClientRect();
+    tooltip.style.left = (ev.clientX - rootRect.left) + 'px';
+    tooltip.style.top = (ev.clientY - rootRect.top) + 'px';
+  }
+})();
+</script>

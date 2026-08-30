@@ -132,7 +132,16 @@ add_dependencies(stage5_point_shader_test shader_point_ops.comp)
 target_link_libraries(stage5_point_shader_test PRIVATE Vulkan::Vulkan blst)
 target_compile_definitions(stage5_point_shader_test PRIVATE SHADER_PATH="${POINT_OPS_SHADER_SPV}")
 
-add_executable(stage6_pippenger_shader_test src/stage6_pippenger_shader_test.cpp src/msm.cpp src/point.cpp src/fp.cpp)
+add_executable(stage6_pippenger_shader_test
+    src/stage6_pippenger_shader_test.cpp src/gpu_pippenger.cpp src/msm.cpp src/point.cpp src/fp.cpp)
 add_dependencies(stage6_pippenger_shader_test shader_pippenger_buckets.comp)
 target_link_libraries(stage6_pippenger_shader_test PRIVATE Vulkan::Vulkan blst)
-target_compile_definitions(stage6_pippenger_shader_test PRIVATE SHADER_PATH="${PIPPENGER_BUCKETS_SHADER_SPV}")
+target_compile_definitions(stage6_pippenger_shader_test PRIVATE
+    SHADER_PATH_PIPPENGER_BUCKETS="${PIPPENGER_BUCKETS_SHADER_SPV}")
+
+add_executable(stage7_benchmark
+    src/stage7_benchmark.cpp src/gpu_pippenger.cpp src/msm.cpp src/point.cpp src/fp.cpp)
+add_dependencies(stage7_benchmark shader_pippenger_buckets.comp)
+target_link_libraries(stage7_benchmark PRIVATE Vulkan::Vulkan blst)
+target_compile_definitions(stage7_benchmark PRIVATE
+    SHADER_PATH_PIPPENGER_BUCKETS="${PIPPENGER_BUCKETS_SHADER_SPV}")
