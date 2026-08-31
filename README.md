@@ -57,7 +57,8 @@ Each stage validates the one before it; none are skipped.
   elliptic-curve-point-addition primitive to atomically accumulate with.
 - [x] **Stage 7** — benchmarking harness (GPU vs. CPU throughput). See
   [Results](#results) below.
-- [ ] **Stage 8** (stretch) — window-size / bucket-count tuning.
+- [x] **Stage 8** (stretch) — window-size / bucket-count tuning. See
+  [Results](#results) below.
 
 ## Results
 
@@ -95,6 +96,31 @@ discrete NVIDIA GPUs. Those aren't included here: this project runs on an
 integrated AMD GPU with an untuned, correctness-first implementation, and a
 cross-hardware, cross-maturity comparison like that wouldn't be
 apples-to-apples.
+
+### Stage 8 — window_bits tuning
+
+Held `n = 8,192` fixed and swept `window_bits`, since the GPU's active
+thread count per dispatch is exactly `2^window_bits` (Stage 6's
+one-thread-per-bucket design) — this parameter isn't just a memory/pass-count
+tradeoff on the GPU side, it's a direct parallelism knob.
+
+| window_bits | buckets | CPU time | GPU time | GPU/CPU |
+|---|---|---|---|---|
+| 2  | 4     | 2.70 s | 58.2 s | 0.05x |
+| 4  | 16    | 1.68 s | 28.3 s | 0.06x |
+| 6  | 64    | 1.19 s | 19.0 s | 0.06x |
+| 8  | 256   | 0.92 s | 3.81 s | 0.24x |
+| 10 | 1,024 | 0.81 s | 1.55 s | 0.53x |
+| 12 | 4,096 | 0.91 s | 2.37 s | 0.39x |
+
+GPU time drops **~37x** from `window_bits=2` to `window_bits=10` as more
+active threads directly fix the underutilization Stage 7 found, then rises
+again at `window_bits=12` as larger per-window bucket bookkeeping starts to
+dominate. `window_bits=10` is the sweet spot for this `n`, closing GPU to
+within ~2x of CPU instead of ~20x behind — but it still doesn't win
+outright at any window size tried. Doing that needs the higher-parallelism
+bucket-assignment redesign noted above (real algorithm work), not just
+retuning this knob.
 
 ## Building
 

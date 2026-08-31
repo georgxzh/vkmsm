@@ -223,6 +223,18 @@
     font-size: 12.5px;
   }
 
+  .viz-root .line-cpu { stroke: var(--series-cpu); }
+  .viz-root .line-gpu { stroke: var(--series-gpu); }
+  .viz-root .dot-cpu { fill: var(--series-cpu); }
+  .viz-root .dot-gpu { fill: var(--series-gpu); }
+  .viz-root .dot-ring { stroke: var(--surface-card); stroke-width: 2; }
+  .viz-root .optimum-tag {
+    fill: var(--text-secondary);
+    font-size: 11px;
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .viz-root .optimum-line { stroke: var(--baseline); stroke-width: 1; stroke-dasharray: 3 3; }
+
   .viz-root footer {
     margin-top: 8px;
     font-size: 12px;
@@ -243,7 +255,8 @@
       </div>
       <div class="meta">
         GPU: <code>AMD Radeon(TM) Graphics</code> (integrated)<br>
-        window_bits: <code>8</code> (both CPU and GPU)<br>
+        Stage 7: window_bits=<code>8</code> fixed, n varies<br>
+        Stage 8: n=<code>8,192</code> fixed, window_bits varies<br>
         build: <code>Release</code>
       </div>
     </div>
@@ -287,7 +300,44 @@
       of per bucket); that&rsquo;s real algorithm work, left for Stage&nbsp;8.
     </div>
 
-    <footer>vkmsm &middot; Stage 7 &middot; georgxzh/vkmsm</footer>
+    <div class="card">
+      <h2>Stage 8 &mdash; window_bits tuning (n = 8,192, fixed)</h2>
+      <div class="legend">
+        <span class="key"><span class="swatch" style="background:var(--series-cpu)"></span>CPU Pippenger</span>
+        <span class="key"><span class="swatch" style="background:var(--series-gpu)"></span>GPU Pippenger</span>
+      </div>
+      <div class="chart-scroll">
+        <svg id="chart2" viewBox="0 0 800 340" width="800" height="340"></svg>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Raw results &mdash; window_bits sweep</h2>
+      <table>
+        <thead>
+          <tr><th>window_bits</th><th>buckets</th><th>CPU time</th><th>GPU time</th><th>GPU/CPU</th><th>Verified</th></tr>
+        </thead>
+        <tbody id="table2-body"></tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <span class="label">What the sweep found</span>
+      Stage 7 flagged the GPU implementation as underused &mdash; only
+      <code>2<sup>window_bits</sup></code> threads run per dispatch, one per bucket. This sweep holds
+      <em>n</em> fixed and varies <code>window_bits</code> to test that directly, and the result
+      confirms it sharply: GPU time drops from <strong>58.2&nbsp;s at window_bits=2</strong> (just 4
+      threads active) to <strong>1.5&nbsp;s at window_bits=10</strong> (1,024 threads) &mdash; a
+      <strong>~37&times;</strong> improvement from one parameter. Past that point it gets worse again
+      (2.4&nbsp;s at window_bits=12): more buckets means more per-window bookkeeping &mdash; a larger
+      bucket array to zero and reduce &mdash; and that overhead starts to dominate once thread count
+      stops being the bottleneck. <strong>window_bits=10 is the sweet spot</strong> for this <em>n</em>,
+      where GPU closes to within ~2&times; of CPU instead of ~20&times; behind. It still doesn&rsquo;t
+      beat CPU outright at any window size tried &mdash; getting there needs the higher-parallelism
+      bucket redesign noted above, not just retuning this knob.
+    </div>
+
+    <footer>vkmsm &middot; Stages 7&ndash;8 &middot; georgxzh/vkmsm</footer>
   </div>
   <div class="tooltip" id="tooltip"></div>
 </div>
@@ -402,5 +452,94 @@
     tooltip.style.left = (ev.clientX - rootRect.left) + 'px';
     tooltip.style.top = (ev.clientY - rootRect.top) + 'px';
   }
+
+  // ==================== Stage 8: window_bits sweep ====================
+  const sweep = [
+    { wb: 2,  buckets: 4,    cpuMs: 2696.5, gpuMs: 58201.2 },
+    { wb: 4,  buckets: 16,   cpuMs: 1680.0, gpuMs: 28289.0 },
+    { wb: 6,  buckets: 64,   cpuMs: 1193.4, gpuMs: 19036.4 },
+    { wb: 8,  buckets: 256,  cpuMs: 921.1,  gpuMs: 3806.2  },
+    { wb: 10, buckets: 1024, cpuMs: 813.8,  gpuMs: 1547.9  },
+    { wb: 12, buckets: 4096, cpuMs: 914.5,  gpuMs: 2374.2  },
+  ];
+
+  const tbody2 = document.getElementById('table2-body');
+  sweep.forEach(d => {
+    const ratio = d.cpuMs / d.gpuMs;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + d.wb + '</td>' +
+      '<td>' + fmt(d.buckets) + '</td>' +
+      '<td>' + fmtMs(d.cpuMs) + '</td>' +
+      '<td>' + fmtMs(d.gpuMs) + '</td>' +
+      '<td>' + ratio.toFixed(2) + '&times;</td>' +
+      '<td><span class="badge">correct</span></td>';
+    tbody2.appendChild(tr);
+  });
+
+  // ---- log-scale line chart ----
+  const svg2 = document.getElementById('chart2');
+  const marginL2 = 60, marginR2 = 16, marginT2 = 16, marginB2 = 40;
+  const plotW2 = W - marginL2 - marginR2;
+  const plotH2 = H - marginT2 - marginB2;
+
+  const logMin = 500, logMax = 70000; // ms, covers the full sweep with headroom
+  const yLog = (v) => marginT2 + plotH2 - (Math.log10(v) - Math.log10(logMin)) /
+    (Math.log10(logMax) - Math.log10(logMin)) * plotH2;
+  const xPos = (i) => marginL2 + (i / (sweep.length - 1)) * plotW2;
+
+  const yTicks2 = [500, 1000, 5000, 10000, 50000];
+  yTicks2.forEach(t => {
+    const y = yLog(t);
+    svg2.appendChild(el('line', { x1: marginL2, x2: W - marginR2, y1: y, y2: y, class: 'grid-line' }));
+    const label = el('text', { x: marginL2 - 10, y: y + 4, 'text-anchor': 'end', class: 'axis-label' });
+    label.textContent = t >= 1000 ? (t/1000) + 's' : t + 'ms';
+    svg2.appendChild(label);
+  });
+  svg2.appendChild(el('line', { x1: marginL2, x2: W - marginR2, y1: marginT2 + plotH2, y2: marginT2 + plotH2, class: 'baseline' }));
+
+  function drawLine(key, cls, dotCls) {
+    const pts = sweep.map((d, i) => [xPos(i), yLog(d[key])]);
+    const path = el('path', {
+      d: 'M ' + pts.map(p => p.join(',')).join(' L '),
+      fill: 'none', class: cls, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+    });
+    svg2.appendChild(path);
+    sweep.forEach((d, i) => {
+      const [x, y] = pts[i];
+      const g = el('g', {});
+      const ring = el('circle', { cx: x, cy: y, r: 6, class: 'dot-ring' });
+      const dot = el('circle', { cx: x, cy: y, r: 4.5, class: dotCls });
+      g.appendChild(ring);
+      g.appendChild(dot);
+      const hit = el('circle', { cx: x, cy: y, r: 12, class: 'hit' });
+      hit.addEventListener('mouseenter', (ev) => {
+        const label = key === 'cpuMs' ? 'CPU' : 'GPU';
+        tooltip.innerHTML = '<b>' + label + '</b>, window_bits=' + d.wb + ' (' + fmt(d.buckets) + ' buckets)<br>' + fmtMs(d[key]);
+        tooltip.classList.add('visible');
+        positionTooltip(ev);
+      });
+      hit.addEventListener('mousemove', positionTooltip);
+      hit.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+      g.appendChild(hit);
+      svg2.appendChild(g);
+    });
+  }
+  drawLine('cpuMs', 'line-cpu', 'dot-cpu');
+  drawLine('gpuMs', 'line-gpu', 'dot-gpu');
+
+  // optimum marker at window_bits=10
+  const optIdx = sweep.findIndex(d => d.wb === 10);
+  const optX = xPos(optIdx);
+  svg2.appendChild(el('line', { x1: optX, x2: optX, y1: marginT2, y2: marginT2 + plotH2, class: 'optimum-line' }));
+  const optLabel = el('text', { x: optX, y: marginT2 - 2, 'text-anchor': 'middle', class: 'optimum-tag' });
+  optLabel.textContent = 'sweet spot';
+  svg2.appendChild(optLabel);
+
+  sweep.forEach((d, i) => {
+    const label = el('text', { x: xPos(i), y: H - marginB2 + 20, 'text-anchor': 'middle', class: 'group-label' });
+    label.textContent = 'wb=' + d.wb;
+    svg2.appendChild(label);
+  });
 })();
 </script>

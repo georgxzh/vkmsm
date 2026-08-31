@@ -145,3 +145,10 @@ add_dependencies(stage7_benchmark shader_pippenger_buckets.comp)
 target_link_libraries(stage7_benchmark PRIVATE Vulkan::Vulkan blst)
 target_compile_definitions(stage7_benchmark PRIVATE
     SHADER_PATH_PIPPENGER_BUCKETS="${PIPPENGER_BUCKETS_SHADER_SPV}")
+
+add_executable(stage8_window_tuning
+    src/stage8_window_tuning.cpp src/gpu_pippenger.cpp src/msm.cpp src/point.cpp src/fp.cpp)
+add_dependencies(stage8_window_tuning shader_pippenger_buckets.comp)
+target_link_libraries(stage8_window_tuning PRIVATE Vulkan::Vulkan blst)
+target_compile_definitions(stage8_window_tuning PRIVATE
+    SHADER_PATH_PIPPENGER_BUCKETS="${PIPPENGER_BUCKETS_SHADER_SPV}")
