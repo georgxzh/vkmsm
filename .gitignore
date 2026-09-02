@@ -12,3 +12,4 @@
 *.lib
 *.exp
 *.exe
+jax_tpu/__pycache__/
